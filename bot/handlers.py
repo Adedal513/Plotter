@@ -3,7 +3,7 @@ import tempfile
 import matplotlib.pyplot as plt
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
-from bot.plotting import plot_histogram
+from bot.plotting import interpret_stats, plot_histogram, get_numeric_stats, get_categorical_stats
 
 # Стейты ConversationHandler
 ASK_COLUMN = 1
@@ -67,10 +67,23 @@ async def column_input_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return ASK_COLUMN
 
     try:
-        # Построим график
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_img:
             plot_histogram(df, column, tmp_img.name)
-            await update.message.reply_photo(photo=open(tmp_img.name, "rb"), caption=f"Гистограмма по столбцу `{column}`", parse_mode="Markdown")
+
+            caption = f"Гистограмма по столбцу `{column}`"
+            if pd.api.types.is_numeric_dtype(df[column]):
+                stats = get_numeric_stats(df[column])
+                interp = interpret_stats(df[column])
+                caption += f"\n\n{stats}\n\n{interp}"
+            else:
+                stats = get_categorical_stats(df[column])
+                caption += f"\n\n{stats}"
+
+            await update.message.reply_photo(
+                photo=open(tmp_img.name, "rb"),
+                caption=caption,
+                parse_mode="Markdown"
+            )
     except Exception as e:
         await update.message.reply_text(f"Ошибка при построении графика: {e}")
 
